@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environments and editors
+.venv/
+venv/
+.idea/
+.vscode/
+*.swp
+
+# Datasets, checkpoints, and generated artifacts
+data/
+datasets/
+saved_results/
+outputs/
+analysis_outputs/
+feature_cache/
+backbones/weights/*
+!backbones/weights/.gitkeep
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# Logs and operating-system files
+*.log
+.DS_Store
+Thumbs.db
