@@ -1,4 +1,4 @@
-"""H-only GBPS, checkpoint, cleanup, and Stage-2 planning for TailGuard."""
+"""Dynamic Head Purification and Stage-2 planning for TailGuard."""
 
 import math
 import os
@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from tailguard.method.dhp_utils import build_gbps_hard_delete_plan, summarize_contamination_labels
+from tailguard.method.dhp_utils import summarize_contamination_labels
 from tailguard.config import TAILGUARD_FINAL_DEFAULTS
 
 
@@ -80,7 +80,7 @@ def run_tailguard_gbps_iteration(scored_df: pd.DataFrame,
     )
     summary = dict(gbps_result['summary'])
     summary.update({
-        'tailguard_h_only': True,
+        'tailguard_head_candidates_only': True,
         'num_scored_total': int(len(train_scores_df)),
         'num_scored_h': int(len(h_scores_df)),
         'num_scored_t_saved_only': int((train_scores_df['tail_candidate'] == 1).sum()),
@@ -524,82 +524,6 @@ def _build_adaptive_capped_head_delete_plan(scored_df: pd.DataFrame,
     }
 
 
-def _build_fixed_head_delete_plan(scored_df: pd.DataFrame,
-                                    group_assignments_df: pd.DataFrame,
-                                    prune_ratio: float,
-                                    min_keep_per_group: int):
-    if not 0.0 <= float(prune_ratio) <= 1.0:
-        raise ValueError('gbps_prune_ratio must be in [0, 1]')
-    if int(min_keep_per_group) < 0:
-        raise ValueError('gbps_min_keep_per_group must be non-negative')
-    baseline_plan = build_gbps_hard_delete_plan(
-        scored_df,
-        group_assignments_df.copy(),
-        prune_ratio=float(prune_ratio),
-        min_keep_per_group=int(min_keep_per_group),
-    )
-    decisions_df = baseline_plan['merged_scores_df'].copy()
-    pruned_keys = set(baseline_plan['pruned_samples']['sample_idx'].astype(int).tolist())
-    decisions_df['prune_mode'] = 'fixed'
-    decisions_df['prune_selected'] = decisions_df['sample_idx'].astype(int).isin(pruned_keys)
-    ranked = decisions_df[['sample_idx', 'group_id', 'image_score', 'prune_selected']].sort_values(
-        ['group_id', 'image_score', 'prune_selected', 'sample_idx'],
-        ascending=[True, False, False, True],
-    )
-    ranked['prune_rank'] = ranked.groupby('group_id').cumcount() + 1
-    rank_by_sample = ranked.set_index('sample_idx')['prune_rank']
-    decisions_df['prune_rank'] = decisions_df['sample_idx'].map(rank_by_sample).astype(int)
-    decisions_df['prune_decision'] = np.where(decisions_df['prune_selected'], 'removed', 'retained')
-    decisions_df['prune_group_reason'] = 'fixed_ratio'
-    decisions_df['prune_group_pi_high'] = np.nan
-    decisions_df['prune_group_selected_active'] = np.nan
-    decisions_df['prune_group_stable_active'] = np.nan
-    decisions_df['prune_group_active_ratio'] = np.nan
-    decisions_df['prune_group_valid_observations'] = 0
-    decisions_df['prune_group_source_iters'] = ''
-    decisions_df['prune_estimated_high_ratio'] = np.nan
-    decisions_df['prune_requested_ratio'] = float(prune_ratio)
-    group_sizes = decisions_df.groupby('group_id')['sample_idx'].transform('size').astype(int)
-    removed_by_group = decisions_df.groupby('group_id')['prune_selected'].transform('sum').astype(int)
-    decisions_df['prune_effective_ratio'] = removed_by_group / group_sizes
-    decisions_df['prune_max_ratio'] = np.nan
-
-    group_rows = []
-    for group_id, group_df in decisions_df.groupby('group_id', sort=True):
-        group_size = int(len(group_df))
-        removed = int(group_df['prune_selected'].sum())
-        group_rows.append({
-            'group_id': int(group_id),
-            'group_size': group_size,
-            'configured_fixed_ratio': float(prune_ratio),
-            'requested_remove': int(math.floor(group_size * float(prune_ratio))),
-            'max_removable': int(max(0, group_size - int(min_keep_per_group))),
-            'removed': removed,
-            'retained': int(group_size - removed),
-            'effective_prune_ratio': float(removed / group_size) if group_size > 0 else 0.0,
-            'decision_reason': 'fixed_ratio',
-        })
-    group_summary_df = pd.DataFrame(group_rows)
-    pruned_samples = decisions_df.loc[decisions_df['prune_selected']].copy().reset_index(drop=True)
-    kept_samples = decisions_df.loc[~decisions_df['prune_selected']].copy().reset_index(drop=True)
-    summary = dict(baseline_plan['summary'])
-    summary.update({
-        'prune_mode': 'fixed',
-        'gbps_prune_ratio': float(prune_ratio),
-        'effective_prune_ratio': float(len(pruned_samples) / len(decisions_df)) if len(decisions_df) > 0 else 0.0,
-    })
-    return {
-        'mode': 'remove',
-        'merged_scores_df': decisions_df,
-        'prune_decisions_df': decisions_df,
-        'group_summary_df': group_summary_df,
-        'pruned_samples': pruned_samples,
-        'kept_samples': kept_samples,
-        'retained_index_map': _build_retained_index_map(kept_samples),
-        'summary': summary,
-    }
-
-
 def build_tailguard_head_delete_plan(selected_scored_df: pd.DataFrame,
                                        head_group_assignments_df: pd.DataFrame,
                                        metadata_df: pd.DataFrame,
@@ -609,11 +533,6 @@ def build_tailguard_head_delete_plan(selected_scored_df: pd.DataFrame,
                                        force_no_delete_reason: Optional[str] = None):
     selected_scores = enrich_scores_with_tailguard_metadata(selected_scored_df, metadata_df)
     h_scores_df = selected_scores.loc[selected_scores['tail_candidate'] == 0].copy().reset_index(drop=True)
-    prune_mode = str(getattr(
-        args,
-        'gbps_prune_mode',
-        TAILGUARD_FINAL_DEFAULTS['gbps_prune_mode'],
-    )).strip().lower()
     min_keep_per_group = int(getattr(
         args,
         'gbps_min_keep_per_group',
@@ -621,53 +540,34 @@ def build_tailguard_head_delete_plan(selected_scored_df: pd.DataFrame,
     ))
     force_no_delete = force_no_delete_reason is not None
 
-    if prune_mode == 'fixed':
-        delete_plan = _build_fixed_head_delete_plan(
-            h_scores_df,
-            head_group_assignments_df,
-            prune_ratio=(
-                0.0
-                if force_no_delete
-                else float(getattr(args, 'gbps_prune_ratio', TAILGUARD_FINAL_DEFAULTS['gbps_prune_ratio']))
-            ),
-            min_keep_per_group=min_keep_per_group,
-        )
-    elif prune_mode == 'adaptive':
-        if gbps_dir is None or selected_iter is None:
-            raise ValueError('adaptive H pruning requires gbps_dir and selected_iter')
-        group_context_df = load_tailguard_head_prune_group_context(gbps_dir, int(selected_iter), args)
-        delete_plan = _build_adaptive_capped_head_delete_plan(
-            h_scores_df,
-            head_group_assignments_df,
-            group_context_df,
-            max_prune_ratio=(
-                0.0
-                if force_no_delete
-                else float(getattr(
-                    args,
-                    'gbps_prune_max_ratio',
-                    TAILGUARD_FINAL_DEFAULTS['gbps_prune_max_ratio'],
-                ))
-            ),
-            min_keep_per_group=min_keep_per_group,
-        )
-    else:
-        raise ValueError('unsupported gbps_prune_mode: {}'.format(prune_mode))
+    if gbps_dir is None or selected_iter is None:
+        raise ValueError('adaptive H pruning requires gbps_dir and selected_iter')
+    group_context_df = load_tailguard_head_prune_group_context(gbps_dir, int(selected_iter), args)
+    delete_plan = _build_adaptive_capped_head_delete_plan(
+        h_scores_df,
+        head_group_assignments_df,
+        group_context_df,
+        max_prune_ratio=(
+            0.0
+            if force_no_delete
+            else float(getattr(
+                args,
+                'gbps_prune_max_ratio',
+                TAILGUARD_FINAL_DEFAULTS['gbps_prune_max_ratio'],
+            ))
+        ),
+        min_keep_per_group=min_keep_per_group,
+    )
 
     h_clean_df = delete_plan['kept_samples'].copy().reset_index(drop=True)
     h_removed_df = delete_plan['pruned_samples'].copy().reset_index(drop=True)
     summary = dict(delete_plan['summary'])
     summary.update({
-        'gbps_prune_mode': prune_mode,
+        'gbps_prune_mode': 'adaptive',
         'gbps_prune_max_ratio': float(getattr(
             args,
             'gbps_prune_max_ratio',
             TAILGUARD_FINAL_DEFAULTS['gbps_prune_max_ratio'],
-        )),
-        'gbps_prune_ratio': float(getattr(
-            args,
-            'gbps_prune_ratio',
-            TAILGUARD_FINAL_DEFAULTS['gbps_prune_ratio'],
         )),
         'gbps_prune_stable_window': int(getattr(
             args,
@@ -684,7 +584,7 @@ def build_tailguard_head_delete_plan(selected_scored_df: pd.DataFrame,
             'gbps_prune_min_active_ratio',
             TAILGUARD_FINAL_DEFAULTS['gbps_prune_min_active_ratio'],
         )),
-        'tailguard_h_only_removal': True,
+        'tailguard_head_only_removal': True,
         'h_zero_removal_fallback': bool(force_no_delete),
         'h_zero_removal_fallback_reason': force_no_delete_reason,
         'num_h_clean': int(len(h_clean_df)),
@@ -694,145 +594,19 @@ def build_tailguard_head_delete_plan(selected_scored_df: pd.DataFrame,
     if force_no_delete and len(h_removed_df) != 0:
         raise RuntimeError('H zero-removal fallback produced a non-empty removal set')
     return {
-        'mode': 'h_only_remove',
-        'prune_mode': prune_mode,
+        'mode': 'dhp_remove',
+        'prune_mode': 'adaptive',
         'selected_scores_df': selected_scores,
         'h_scores_df': h_scores_df,
         'h_clean_samples': h_clean_df,
         'h_removed_samples': h_removed_df,
         'h_prune_decisions_df': delete_plan['prune_decisions_df'],
         'h_prune_group_summary_df': delete_plan['group_summary_df'],
-        'retained_index_map_h_only': _build_retained_index_map(h_clean_df),
+        'retained_index_map_dhp': _build_retained_index_map(h_clean_df),
         'delete_plan': delete_plan,
         'baseline_plan': delete_plan,
         'summary': summary,
     }
-
-
-def _list_window_iters(gbps_dir: str, selected_iter: int, stable_window: int):
-    iter_numbers = []
-    for name in os.listdir(gbps_dir):
-        iter_number = _iter_number_from_name(name)
-        if iter_number is not None and iter_number <= int(selected_iter):
-            if os.path.isfile(os.path.join(gbps_dir, name, 'train_scores.csv')):
-                iter_numbers.append(iter_number)
-    iter_numbers = sorted(iter_numbers)
-    return iter_numbers[-max(1, int(stable_window)):]
-
-
-def _normal_pdf(x, mu, sigma):
-    sigma = max(float(sigma), 1e-6)
-    return np.exp(-0.5 * ((float(x) - float(mu)) / sigma) ** 2) / (sigma * np.sqrt(2 * np.pi))
-
-
-def _posterior_high_from_metrics(image_score: float, metrics_row: pd.Series):
-    required = ['score_median', 'score_mad', 'mu_low', 'mu_high', 'sigma_low', 'sigma_high', 'pi_low', 'pi_high']
-    if any(pd.isna(metrics_row.get(column)) for column in required):
-        return None
-    z_score = (float(image_score) - float(metrics_row['score_median'])) / max(float(metrics_row['score_mad']), 1e-6)
-    low = float(metrics_row['pi_low']) * _normal_pdf(z_score, metrics_row['mu_low'], metrics_row['sigma_low'])
-    high = float(metrics_row['pi_high']) * _normal_pdf(z_score, metrics_row['mu_high'], metrics_row['sigma_high'])
-    denom = low + high
-    if denom <= 0:
-        return None
-    return float(high / denom)
-
-
-def classify_tail_attached_stable_risk(tail_attached_df: pd.DataFrame,
-                                       gbps_dir: str,
-                                       selected_iter: Optional[int],
-                                       args):
-    attached_df = tail_attached_df.copy().reset_index(drop=True)
-    stable_columns = {
-        'stable_p_high_median': 0.0,
-        'stable_active_ratio': 0.0,
-        'stable_valid_observations': 0,
-        'stable_risk_source_iters': '',
-        'stable_selected_group_active': False,
-        'stable_head_noise': False,
-    }
-    if len(attached_df) == 0:
-        for column, value in stable_columns.items():
-            attached_df[column] = value
-        return attached_df.copy(), attached_df.copy(), attached_df.copy()
-    if selected_iter is None:
-        for column, value in stable_columns.items():
-            attached_df[column] = value
-        return attached_df.copy(), attached_df.iloc[0:0].copy(), attached_df.copy()
-
-    window_iters = _list_window_iters(gbps_dir, int(selected_iter), int(getattr(args, 'tg_stable_window', 3)))
-    p_high_thr = float(getattr(
-        args,
-        'tg_t_attached_noise_p_high_thr',
-        TAILGUARD_FINAL_DEFAULTS['tg_t_attached_noise_p_high_thr'],
-    ))
-    min_valid = int(getattr(args, 'tg_stable_min_observations', 1))
-    window_data = {}
-    for iter_number in window_iters:
-        iter_dir = os.path.join(gbps_dir, 'iter_{:05d}'.format(int(iter_number)))
-        score_path = os.path.join(iter_dir, 'train_scores.csv')
-        metrics_path = os.path.join(iter_dir, 'h_group_metrics.csv')
-        if not os.path.isfile(score_path) or not os.path.isfile(metrics_path):
-            continue
-        train_scores_df = pd.read_csv(score_path, usecols=['sample_idx', 'image_score'])
-        group_metrics_df = pd.read_csv(metrics_path)
-        window_data[int(iter_number)] = (
-            train_scores_df.set_index('sample_idx')['image_score'],
-            group_metrics_df.set_index('group_id', drop=False),
-        )
-    rows = []
-
-    for _, row in attached_df.iterrows():
-        sample_idx = int(row['sample_idx'])
-        best_group_id = int(row['best_group_id'])
-        p_high_values = []
-        active_values = []
-        source_iters = []
-        selected_active = False
-        for iter_number, (image_scores_by_sample, group_metrics_by_group) in window_data.items():
-            if sample_idx not in image_scores_by_sample.index or best_group_id not in group_metrics_by_group.index:
-                continue
-            metric_row = group_metrics_by_group.loc[best_group_id]
-            if isinstance(metric_row, pd.DataFrame):
-                metric_row = metric_row.iloc[0]
-            p_high = _posterior_high_from_metrics(float(image_scores_by_sample.loc[sample_idx]), metric_row)
-            if p_high is None:
-                continue
-            is_active = bool(metric_row.get('is_active_group', False))
-            if int(iter_number) == int(selected_iter):
-                selected_active = is_active
-            p_high_values.append(float(p_high))
-            active_values.append(1.0 if is_active else 0.0)
-            source_iters.append(int(iter_number))
-
-        valid_observations = len(p_high_values)
-        active_ratio = float(np.mean(active_values)) if len(active_values) > 0 else 0.0
-        p_high_median = float(np.median(p_high_values)) if len(p_high_values) > 0 else 0.0
-        is_noise = bool(
-            valid_observations >= min_valid
-            and selected_active
-            and active_ratio > 0.5
-            and p_high_median > p_high_thr
-        )
-        out_row = row.to_dict()
-        out_row.update({
-            'stable_p_high_median': p_high_median,
-            'stable_active_ratio': active_ratio,
-            'stable_valid_observations': int(valid_observations),
-            'stable_risk_source_iters': ','.join(str(value) for value in source_iters),
-            'stable_selected_group_active': bool(selected_active),
-            'stable_head_noise': bool(is_noise),
-        })
-        rows.append(out_row)
-
-    risk_df = pd.DataFrame(rows)
-    if len(risk_df) == 0:
-        for column, value in stable_columns.items():
-            attached_df[column] = value
-        return attached_df.copy(), attached_df.iloc[0:0].copy(), attached_df.copy()
-    noise_df = risk_df.loc[risk_df['stable_head_noise']].copy().reset_index(drop=True)
-    normal_df = risk_df.loc[~risk_df['stable_head_noise']].copy().reset_index(drop=True)
-    return normal_df, noise_df, risk_df
 
 
 def build_tailguard_stage2_plan(h_clean_df: pd.DataFrame,

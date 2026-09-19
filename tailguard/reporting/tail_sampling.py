@@ -133,8 +133,7 @@ def build_tail_candidate_partition(details_df: pd.DataFrame):
 
 def run_tail_sampler_analysis(embeddings,
                               metadata_df: pd.DataFrame,
-                              args,
-                              plateau_gap_guard: bool = False):
+                              args):
     embeddings = np.asarray(embeddings, dtype=np.float32)
     if embeddings.ndim != 2:
         raise ValueError('embeddings must have shape [N, D]')
@@ -142,11 +141,7 @@ def run_tail_sampler_analysis(embeddings,
         raise ValueError('metadata and embeddings size mismatch')
 
     sampler, sampler_name = build_tail_sampler(
-        sampler_type=getattr(args, 'tailsampler_type', 'adaptive'),
-        threshold_type=getattr(args, 'tailsampler_th_type', None),
-        vote_type=getattr(args, 'tailsampler_vote_type', None),
         percentile=float(getattr(args, 'tailsampler_percentile', 0.15)),
-        plateau_gap_guard=bool(plateau_gap_guard),
     )
 
     feature_tensor = torch.from_numpy(embeddings)
@@ -214,10 +209,10 @@ def run_tail_sampler_analysis(embeddings,
         'run_name': getattr(args, 'save_name', 'tailsampler_run'),
         'dataset_name': getattr(args, 'tailsampler_dataset_name', os.path.basename(str(getattr(args, 'data_path', '')))),
         'sampler_name': sampler_name,
-        'tailsampler_type': getattr(args, 'tailsampler_type', 'adaptive'),
-        'tail_th_type': getattr(args, 'tailsampler_th_type', None),
-        'vote_type': getattr(args, 'tailsampler_vote_type', None),
-        'embedding_source': getattr(args, 'tailsampler_embedding_source', 'encoder'),
+        'tailsampler_type': 'adaptive_trim_mode',
+        'tail_th_type': 'trim_min',
+        'vote_type': 'mode',
+        'embedding_source': 'encoder_cls',
         'num_samples': int(len(details_df)),
         'num_classes': int(len(class_counts)),
         'gt_mode': gt_mode_name,

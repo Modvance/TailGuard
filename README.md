@@ -22,36 +22,33 @@ TailGuard consists of three dependent stages:
 
 The paper configuration uses a frozen DINOv2 ViT-B/14 encoder and the Dinomaly
 reconstruction core. The canonical TailGuard parameters are centralized in
-`tailguard/config.py`; selecting `--tg_method_mode full` runs the complete
-method.
+`tailguard/config.py`; the default `full` variant runs the complete method.
 
 ## Repository structure
 
 ```text
-.
+TailGuard
 ├── assets/                     # Pipeline and repository illustrations
-├── scripts/                    # Convenience launchers
+├── main.py                     # CLI configuration and complete pipeline orchestration
+├── build_datasets.sh           # Long-tailed noisy benchmark construction entry point
+├── manifests/                  # Paper dataset construction manifests
 ├── tailguard/
-│   ├── cli/                    # Training and no-retraining replay entry points
 │   ├── data/                   # Dataset readers, profiles, and manifest parsing
-│   ├── engine/                 # Reconstruction training and evaluation
-│   ├── method/                 # Tail sampling, DHP, TRP, and CTE
+│   ├── engine/                 # Training pipeline and final evaluation
+│   ├── method/                 # Tail sampling, DHP, TRP, CTE, and final score fusion
 │   ├── models/                 # Encoder, decoder, and reconstruction model
 │   ├── optimizers/             # Optimizer used by the paper configuration
 │   ├── reporting/              # Artifact writers and post-hoc diagnostics
 │   └── vendor/dinov2/          # Required DINOv2 architecture definitions
-├── tools/                      # Dataset conversion, construction, and score fusion
+├── tools/                      # Dataset conversion and construction
 └── requirements.txt
 ```
 
 Datasets, pretrained weights, checkpoints, and generated results are not
 stored in the repository. The DINOv2 checkpoint is downloaded from the
-upstream host on first use. At that time, `backbones/weights/` is created
-automatically as a local cache.
+upstream host on first use.
 
 ## Environment
-
-The paper experiments used Python 3.8.12, PyTorch 1.12.0, and CUDA 11.3.
 
 ```bash
 conda create -n tailguard python=3.8.12
@@ -59,135 +56,57 @@ conda activate tailguard
 pip install -r requirements.txt
 ```
 
-Run all commands below from the repository root.
+The paper experiments used PyTorch 1.12.0 and CUDA 11.3. Run the following
+commands from the repository root.
 
 ## Data preparation
 
-TailGuard expects an MVTec AD compatible directory layout:
-
-```text
-dataset_root/
-└── class_name/
-    ├── train/good/
-    ├── test/good/
-    ├── test/defect_type/
-    └── ground_truth/defect_type/
-```
-
-### MVTec AD
-
-To construct a long-tailed noisy dataset, prepare two text manifests:
-
-- `prune_good.txt` lists normal training images to remove;
-- `inject_defects.txt` lists anomalous images to insert into `train/good`.
-
-Each entry is a path relative to the constructed dataset root. Build the
-dataset with:
-
-```bash
-python tools/make_mvtecad_nlt.py \
-  --source-dir /path/to/mvtec_anomaly_detection \
-  --dest-dir /path/to/mvtecad-step_k4-seed01 \
-  --prune-manifest /path/to/prune_good.txt \
-  --noisy-manifest /path/to/inject_defects.txt \
-  --symlink-all
-```
-
-`--symlink-all` avoids duplicating the source images. The clean source dataset
-must remain available while the constructed dataset is in use. Omit this flag
-to materialize a copy instead.
-
-The convenience wrapper `scripts/build_one_dataset.sh` can also be used when
-the manifests are organized as:
-
-```text
-manifests/<mvtecad-nlt|visa-nlt>/<pareto|step_k4|step_k1>/<seed01..seed05>/
-├── prune_good.txt
-└── inject_defects.txt
-```
-
-### VisA
-
-Convert the original VisA release to the same directory layout first:
+Download [MVTec AD](https://www.mvtec.com/company/research/datasets/mvtec-ad)
+and [VisA](https://github.com/amazon-science/spot-diff). Convert VisA to the
+MVTec AD layout before constructing the benchmark:
 
 ```bash
 python tools/convert_visa_to_mvtec_format.py \
-  --source_dir /path/to/visa \
-  --target_dir /path/to/visa_mvtec
+  --source_dir ../VisA \
+  --target_dir ../VisA_pytorch/1cls
 ```
 
-Then apply `tools/make_mvtecad_nlt.py` with the corresponding VisA manifests.
-
-## Training
-
-The complete MVTec AD configuration can be launched with:
+Build the long-tailed noisy datasets with the provided manifests:
 
 ```bash
-python -m tailguard.cli.train \
+bash build_datasets.sh \
+  ../mvtec_anomaly_detection \
+  ../tailguard_datasets \
+  mvtecad-nlt
+
+bash build_datasets.sh \
+  ../VisA_pytorch/1cls \
+  ../tailguard_datasets \
+  visa-nlt
+```
+
+## Training and evaluation
+
+MVTec AD:
+
+```bash
+python main.py \
   --dataset_profile mvtec \
-  --data_path /path/to/mvtecad-step_k4-seed01 \
-  --save_dir ./saved_results \
-  --save_name mvtec_step_k4_seed01_full \
-  --tg_method_mode full \
-  --gpus 0
-```
-
-Use `--dataset_profile visa` for VisA. Training defaults to 10,000 iterations
-and writes checkpoints, resolved configuration, intermediate assignments, and
-evaluation results under `save_dir/save_name`.
-
-If the injected-anomaly manifest is available, it may be supplied for
-post-hoc auditing:
-
-```bash
---diag_manifest_path /path/to/inject_defects.txt
-```
-
-The contamination labels loaded from this manifest are used only by reporting
-and diagnostic code; they do not affect TailGuard decisions. With a manifest,
-the equivalent convenience launcher is:
-
-```bash
-bash scripts/train_one.sh \
-  mvtec \
-  /path/to/mvtecad-step_k4-seed01 \
-  /path/to/inject_defects.txt \
-  ./saved_results \
-  mvtec_step_k4_seed01_full \
-  0
-```
-
-## Dual-reference image evaluation
-
-The complete run writes reconciled CTE scores to
-`tailguard/memory/memory_eval_scores.csv` inside the run directory. A coverage
-reference can be rebuilt from the same trained checkpoint without updating
-model parameters:
-
-```bash
-python -m tailguard.cli.coverage_replay \
-  --full_run_dir ./saved_results/mvtec_step_k4_seed01_full \
-  --data_path /path/to/mvtecad-step_k4-seed01 \
-  --output_dir ./saved_results/mvtec_step_k4_seed01_full_coverage \
-  --feature_cache_dir ./feature_cache/mvtec \
+  --data_path ../tailguard_datasets/mvtecad-step_k4-seed01 \
   --gpu 0
 ```
 
-Fuse the coverage and reconciled image scores with:
+VisA:
 
 ```bash
-python tools/fuse_dual_scores.py \
-  --coverage-scores ./saved_results/mvtec_step_k4_seed01_full_coverage/coverage_eval_scores.csv \
-  --reconciled-scores ./saved_results/mvtec_step_k4_seed01_full/tailguard/memory/memory_eval_scores.csv \
-  --output-dir ./saved_results/mvtec_step_k4_seed01_full_dual
+python main.py \
+  --dataset_profile visa \
+  --data_path ../tailguard_datasets/visa-step_k4-seed01 \
+  --gpu 0
 ```
 
-To additionally report head and tail subsets, pass the optional
-`--class-roles` argument with a CSV containing `class_name` and `is_gt_tail`.
-Pixel localization uses the reconciled final anomaly map, whereas the two
-reference views are averaged for the final image score.
-
-Full training and coverage replay require a CUDA GPU.
+The default configuration runs the complete TailGuard pipeline. Results are
+saved under `saved_results/`.
 
 ## Citation
 

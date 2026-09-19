@@ -1,12 +1,11 @@
-"""Replay TailGuard's raw-tail coverage branch without retraining.
+"""Build TailGuard's coverage reference from the trained full pipeline.
 
-The script rebuilds the ``h_raw_e`` pseudo-class registry from a Full run,
+This module rebuilds the coverage pseudo-class registry from a full run,
 extracts frozen DINOv2 CLS/patch features once, and combines the resulting
 coverage memory increment with the reconstruction scores already saved by the
-Full run.  An optional reference Raw-E run enables strict C01 validation.
+full run. It does not update any model parameters.
 """
 
-import argparse
 import datetime as dt
 import hashlib
 import json
@@ -45,7 +44,6 @@ from tailguard.method.cte_replay import (
 )
 from tailguard.data.profiles import (
     MVTec_PROFILE,
-    dataset_profile_names,
     get_dataset_profile,
     validate_profile_contract,
 )
@@ -621,27 +619,3 @@ def replay_coverage(parsed_args):
             os.path.join(output_dir, 'coverage_replay_summary.json')
         ))
     return summary
-
-
-def build_parser():
-    parser = argparse.ArgumentParser(description='Replay raw-tail coverage memory without training')
-    parser.add_argument('--full_run_dir', required=True)
-    parser.add_argument('--data_path', required=True)
-    parser.add_argument('--output_dir', required=True)
-    parser.add_argument('--feature_cache_dir', required=True)
-    parser.add_argument('--encoder_checkpoint_path', default=None)
-    parser.add_argument('--dataset_profile', choices=dataset_profile_names(), default=None)
-    parser.add_argument('--reference_raw_run_dir', default=None)
-    parser.add_argument('--gpu', type=int, default=0)
-    parser.add_argument('--batch_size', type=int, default=4)
-    parser.add_argument('--tg_memory_topk_ratio', type=float, default=0.05)
-    parser.add_argument('--tg_memory_fusion_lambda', type=float, default=1.0)
-    parser.add_argument('--tg_memory_route_margin_threshold', type=float, default=float('-inf'))
-    parser.add_argument('--tg_memory_min_class_members', type=int, default=1)
-    parser.add_argument('--float_atol', type=float, default=2e-5)
-    parser.add_argument('--no-save-memory-system', dest='no_save_memory_system', action='store_true')
-    return parser
-
-
-if __name__ == '__main__':
-    replay_coverage(build_parser().parse_args())

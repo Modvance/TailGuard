@@ -13,14 +13,14 @@ venv/
 *.swp
 
 # Datasets, checkpoints, and generated artifacts
-data/
-datasets/
-saved_results/
-outputs/
-analysis_outputs/
-feature_cache/
-backbones/weights/*
-!backbones/weights/.gitkeep
+/data/
+/datasets/
+/saved_results/
+/outputs/
+/analysis_outputs/
+/feature_cache/
+/backbones/weights/*
+!/backbones/weights/.gitkeep
 *.pt
 *.pth
 *.ckpt

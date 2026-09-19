@@ -1,11 +1,10 @@
 """Fuse TailGuard coverage and reconciled image scores.
 
 The full training run writes the reconciled score table. The coverage replay
-writes a second table for the same test images. This script validates sample
+writes a second table for the same test images. This module validates sample
 identity, averages the two final image scores, and reports macro I-AUROC.
 """
 
-import argparse
 import json
 from pathlib import Path
 
@@ -122,23 +121,3 @@ def fuse(coverage_path, reconciled_path, output_dir, class_roles_path=None):
     with (output / "dual_summary.json").open("w", encoding="utf-8") as file:
         json.dump(summary, file, indent=2, ensure_ascii=False)
     return summary
-
-
-def build_parser():
-    parser = argparse.ArgumentParser(description="Fuse TailGuard dual-reference image scores")
-    parser.add_argument("--coverage-scores", required=True)
-    parser.add_argument("--reconciled-scores", required=True)
-    parser.add_argument("--output-dir", required=True)
-    parser.add_argument("--class-roles", default=None)
-    return parser
-
-
-if __name__ == "__main__":
-    args = build_parser().parse_args()
-    result = fuse(
-        coverage_path=args.coverage_scores,
-        reconciled_path=args.reconciled_scores,
-        output_dir=args.output_dir,
-        class_roles_path=args.class_roles,
-    )
-    print(json.dumps(result, indent=2, ensure_ascii=False))

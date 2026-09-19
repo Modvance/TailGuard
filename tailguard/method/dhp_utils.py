@@ -1,4 +1,3 @@
-import math
 import os
 
 import numpy as np
@@ -39,94 +38,6 @@ def _safe_float(value):
     if isinstance(value, (np.floating, float)) and (np.isnan(value) or np.isinf(value)):
         return None
     return float(value)
-
-
-def build_gbps_hard_delete_plan(scored_df, group_assignments_df, prune_ratio, min_keep_per_group):
-    merged_df = scored_df.copy()
-    group_df = group_assignments_df.copy()
-    if 'sample_key' not in group_df.columns:
-        raise ValueError('group assignments must contain sample_key')
-    group_df['sample_key'] = group_df['sample_key'].astype(int)
-    merged_df['sample_idx'] = merged_df['sample_idx'].astype(int)
-    merged_df = merged_df.merge(
-        group_df,
-        left_on='sample_idx',
-        right_on='sample_key',
-        how='left',
-        suffixes=('', '_group'),
-    )
-    if merged_df['group_id'].isna().any():
-        missing_count = int(merged_df['group_id'].isna().sum())
-        raise ValueError('missing group_id for {} scored samples'.format(missing_count))
-
-    required_columns = ['sample_idx', 'class_id', 'base_idx', 'image_score', 'group_id']
-    missing_columns = [column for column in required_columns if column not in merged_df.columns]
-    if len(missing_columns) > 0:
-        raise ValueError('missing required columns for gbps hard delete: {}'.format(', '.join(missing_columns)))
-
-    merged_df['group_id'] = merged_df['group_id'].astype(int)
-    merged_df['class_id'] = merged_df['class_id'].astype(int)
-    merged_df['base_idx'] = merged_df['base_idx'].astype(int)
-
-    pruned_frames = []
-    retained_index_map = {}
-    group_counts = {}
-
-    grouped = merged_df.groupby('group_id', sort=True)
-    for group_id, group_samples in grouped:
-        group_samples = group_samples.sort_values('image_score', ascending=False).reset_index(drop=True)
-        group_size = int(len(group_samples))
-        requested_remove = int(math.floor(group_size * float(prune_ratio)))
-        max_removable = max(0, group_size - int(min_keep_per_group))
-        remove_count = min(requested_remove, max_removable)
-
-        pruned_df = group_samples.iloc[:remove_count].copy()
-        retained_df = group_samples.iloc[remove_count:].copy()
-        if remove_count > 0:
-            pruned_frames.append(pruned_df)
-
-        group_counts[str(int(group_id))] = {
-            'group_id': int(group_id),
-            'group_size': group_size,
-            'removed': int(remove_count),
-            'retained': int(len(retained_df)),
-            'requested_remove': int(requested_remove),
-        }
-
-    pruned_samples = pd.concat(pruned_frames, ignore_index=True) if len(pruned_frames) > 0 else pd.DataFrame(columns=merged_df.columns)
-    pruned_keys = set(pruned_samples['sample_idx'].astype(int).tolist()) if len(pruned_samples) > 0 else set()
-    kept_samples = merged_df.loc[~merged_df['sample_idx'].astype(int).isin(pruned_keys)].copy().reset_index(drop=True)
-
-    for class_id, class_samples in kept_samples.groupby('class_id', sort=True):
-        retained_index_map[int(class_id)] = [int(base_idx) for base_idx in class_samples['base_idx'].tolist()]
-
-    class_retained_counts = {}
-    if 'class_name' in kept_samples.columns:
-        for class_id, class_samples in kept_samples.groupby('class_id', sort=True):
-            class_name = str(class_samples['class_name'].iloc[0]) if len(class_samples) > 0 else str(class_id)
-            class_retained_counts[str(class_name)] = int(len(class_samples))
-
-    summary = {
-        'mode': 'remove',
-        'num_samples_before_prune': int(len(merged_df)),
-        'num_pruned': int(len(pruned_samples)),
-        'num_retained': int(len(kept_samples)),
-        'prune_ratio': float(prune_ratio),
-        'min_keep_per_group': int(min_keep_per_group),
-        'num_groups': int(merged_df['group_id'].nunique()),
-        'group_counts': group_counts,
-        'class_retained_counts': class_retained_counts,
-    }
-    summary.update(summarize_contamination_labels(pruned_samples, prefix='pruned'))
-    summary.update(summarize_contamination_labels(kept_samples, prefix='kept'))
-    return {
-        'mode': 'remove',
-        'merged_scores_df': merged_df,
-        'pruned_samples': pruned_samples,
-        'kept_samples': kept_samples,
-        'retained_index_map': retained_index_map,
-        'summary': summary,
-    }
 
 
 def evaluate_gbps_ci_peak_trigger(U_t, SE_t, noise_evidence, best_U, best_SE, best_iter,

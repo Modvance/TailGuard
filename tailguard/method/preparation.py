@@ -1,4 +1,4 @@
-"""TailSampler, embeddings, and H-only grouping preparation for TailGuard."""
+"""TailSampler, embeddings, and head-candidate grouping for TailGuard."""
 
 import os
 from typing import Optional
@@ -90,25 +90,14 @@ def _as_float_tensor(embeddings: np.ndarray) -> torch.Tensor:
 
 def _compute_adaptive_angles(features: torch.Tensor, args):
     default_angle = float(getattr(args, 'tg_default_adaptive_angle', 5.0))
-    sampler_type = getattr(args, 'tailsampler_type', TAILGUARD_FINAL_DEFAULTS['tailsampler_type'])
-    threshold_type = getattr(args, 'tailsampler_th_type', None)
-
-    if sampler_type == 'adaptive':
-        threshold_type = 'double_max_step' if threshold_type is None else threshold_type
-    elif sampler_type == 'adaptive_trim_mode':
-        threshold_type = 'trim_min' if threshold_type is None else threshold_type
-    else:
-        angles = torch.full((features.shape[0],), default_angle, dtype=torch.float32)
-        return angles, 'default_non_adaptive'
-
     try:
         self_sim = compute_self_sim(features.detach().cpu())
-        thresholds = _compute_ths(self_sim, threshold_type).reshape(-1)
+        thresholds = _compute_ths(self_sim, 'trim_min').reshape(-1)
         thresholds = torch.clamp(thresholds.float(), min=-1.0, max=1.0)
         angles = torch.rad2deg(torch.acos(thresholds))
         angles = torch.nan_to_num(angles, nan=default_angle, posinf=default_angle, neginf=default_angle)
         angles = torch.clamp(angles, min=default_angle)
-        return angles.cpu(), 'adaptive_threshold_{}'.format(threshold_type)
+        return angles.cpu(), 'adaptive_threshold_trim_min'
     except Exception:
         angles = torch.full((features.shape[0],), default_angle, dtype=torch.float32)
         return angles, 'default_after_angle_error'
@@ -116,15 +105,7 @@ def _compute_adaptive_angles(features: torch.Tensor, args):
 
 def _extract_tail_candidates(embeddings: np.ndarray, metadata_df: pd.DataFrame, args):
     sampler, sampler_name = build_tail_sampler(
-        sampler_type=getattr(args, 'tailsampler_type', TAILGUARD_FINAL_DEFAULTS['tailsampler_type']),
-        threshold_type=getattr(args, 'tailsampler_th_type', None),
-        vote_type=getattr(args, 'tailsampler_vote_type', None),
         percentile=float(getattr(args, 'tailsampler_percentile', 0.15)),
-        plateau_gap_guard=bool(getattr(
-            args,
-            'tailsampler_plateau_gap_guard',
-            TAILGUARD_FINAL_DEFAULTS['tailsampler_plateau_gap_guard'],
-        )),
     )
     features = _as_float_tensor(embeddings)
     _, tail_indices, pred_class_sizes = sampler.run(features, return_class_sizes=True)
@@ -182,7 +163,7 @@ def _build_head_group_assignments(group_embeddings: np.ndarray, metadata_df: pd.
         head_embeddings,
         head_metadata_df['sample_key'].tolist(),
         method=getattr(args, 'gbps_grouping_method', 'kmeans'),
-        num_groups=getattr(args, 'gbps_num_groups', None),
+        num_groups=None,
         auto_k=bool(getattr(args, 'gbps_auto_k', TAILGUARD_FINAL_DEFAULTS['gbps_auto_k'])),
         k_candidates=_parse_k_candidates(getattr(args, 'gbps_k_candidates', DEFAULT_K_CANDIDATES)),
         pca_dim=getattr(args, 'gbps_pca_dim', 64),
@@ -196,7 +177,7 @@ def _build_head_group_assignments(group_embeddings: np.ndarray, metadata_df: pd.
     group_df['group_id'] = group_df['group_id'].astype(int)
     group_df['group_size'] = group_df['group_size'].astype(int)
     group_info.update({
-        'tailguard_h_only': True,
+        'tailguard_head_candidates_only': True,
         'num_head_samples': int(len(group_df)),
         'num_tail_samples_excluded': int((~head_mask).sum()),
     })
@@ -211,8 +192,8 @@ def prepare_tailguard_metadata(model,
                                  args,
                                  manifest_path: Optional[str] = None,
                                  manifest_requested_path: Optional[str] = None):
-    tail_embedding_source = getattr(args, 'tg_tail_embedding_source', None) or getattr(args, 'tailsampler_embedding_source', 'encoder_cls')
-    group_embedding_source = getattr(args, 'tg_group_embedding_source', None) or getattr(args, 'gbps_embedding_source', 'encoder')
+    tail_embedding_source = args.tg_tail_embedding_source
+    group_embedding_source = args.tg_group_embedding_source
 
     tail_embeddings, metadata_df = extract_image_embeddings(
         model,
@@ -317,11 +298,6 @@ def prepare_tailguard_metadata(model,
                 tail_embeddings,
                 full_metadata_df,
                 args,
-                plateau_gap_guard=bool(getattr(
-                    args,
-                    'tailsampler_plateau_gap_guard',
-                    TAILGUARD_FINAL_DEFAULTS['tailsampler_plateau_gap_guard'],
-                )),
             )
             if output_dir is not None:
                 analysis_saved = save_tail_sampler_artifacts(
@@ -352,7 +328,7 @@ def prepare_tailguard_metadata(model,
         'num_head_candidates': int((train_metadata_df['tail_candidate'] == 0).sum()),
         'tail_candidate_ratio': float(train_metadata_df['tail_candidate'].mean()),
         'num_head_groups': int(head_group_assignments_df['group_id'].nunique()),
-        'tail_sampler_type': getattr(args, 'tailsampler_type', TAILGUARD_FINAL_DEFAULTS['tailsampler_type']),
+        'tail_sampler_type': 'adaptive_trim_mode',
         'tail_sampler_impl': sampler_name,
         'tail_embedding_source': tail_embedding_source,
         'group_embedding_source': group_embedding_source,
@@ -371,20 +347,16 @@ def prepare_tailguard_metadata(model,
     saved = None
     if output_dir is not None:
         metadata = {
-            'tail_sampler_type': getattr(args, 'tailsampler_type', TAILGUARD_FINAL_DEFAULTS['tailsampler_type']),
-            'tailsampler_th_type': getattr(args, 'tailsampler_th_type', None),
-            'tailsampler_vote_type': getattr(args, 'tailsampler_vote_type', None),
+            'tail_sampler_type': 'adaptive_trim_mode',
+            'tailsampler_th_type': 'trim_min',
+            'tailsampler_vote_type': 'mode',
             'tailsampler_percentile': float(getattr(args, 'tailsampler_percentile', 0.15)),
-            'tailsampler_plateau_gap_guard': bool(getattr(
-                args,
-                'tailsampler_plateau_gap_guard',
-                TAILGUARD_FINAL_DEFAULTS['tailsampler_plateau_gap_guard'],
-            )),
+            'tailsampler_plateau_gap_guard': True,
             'tail_partition_guard': partition_diagnostics,
             'tail_embedding_source': tail_embedding_source,
             'group_embedding_source': group_embedding_source,
             'grouping_method': getattr(args, 'gbps_grouping_method', 'kmeans'),
-            'gbps_num_groups': getattr(args, 'gbps_num_groups', None),
+            'gbps_num_groups': None,
             'gbps_auto_k': bool(getattr(args, 'gbps_auto_k', TAILGUARD_FINAL_DEFAULTS['gbps_auto_k'])),
             'gbps_k_candidates': list(_parse_k_candidates(getattr(args, 'gbps_k_candidates', DEFAULT_K_CANDIDATES))),
             'gbps_pca_dim': getattr(args, 'gbps_pca_dim', 64),

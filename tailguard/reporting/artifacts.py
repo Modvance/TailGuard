@@ -132,12 +132,6 @@ def save_tailguard_head_prune_artifacts(output_dir: str,
     }
 
 
-def save_tailguard_attachment_replay_config(output_dir: str, config: Dict):
-    path = os.path.join(output_dir, 'attachment_replay_config.json')
-    _write_json(path, config)
-    return path
-
-
 def save_tailguard_attachment_artifacts(output_dir: str,
                                           geometry: Dict,
                                           conformity_df: pd.DataFrame,
