@@ -35,46 +35,23 @@ def _write_json(path: str, payload: Dict):
 
 
 def save_tailguard_prepare_artifacts(output_dir: str,
-                                       candidates_df: pd.DataFrame,
                                        train_metadata_df: pd.DataFrame,
-                                       head_group_assignments_df: pd.DataFrame,
                                        metadata: Dict,
-                                       cls_embeddings_payload: Optional[Dict] = None,
-                                       grouping_embeddings_payload: Optional[Dict] = None,
                                        analysis_metadata_df: Optional[pd.DataFrame] = None):
     os.makedirs(output_dir, exist_ok=True)
-    candidates_path = os.path.join(output_dir, 'tailsampler_candidates.csv')
     train_metadata_path = os.path.join(output_dir, 'tailguard_train_metadata.csv')
     analysis_metadata_path = os.path.join(output_dir, 'tailguard_train_analysis_metadata.csv')
-    head_group_assignments_path = os.path.join(output_dir, 'head_group_assignments.csv')
-    cls_embeddings_path = os.path.join(output_dir, 'cls_embeddings.pt')
-    grouping_embeddings_path = os.path.join(output_dir, 'grouping_embeddings.pt')
     summary_path = os.path.join(output_dir, 'prepare_summary.json')
 
-    candidates_df.to_csv(candidates_path, index=False)
     train_metadata_df.to_csv(train_metadata_path, index=False)
-    head_group_assignments_df.to_csv(head_group_assignments_path, index=False)
     if analysis_metadata_df is not None:
         analysis_metadata_df.to_csv(analysis_metadata_path, index=False)
     else:
         analysis_metadata_path = None
 
-    if cls_embeddings_payload is not None:
-        torch.save(cls_embeddings_payload, cls_embeddings_path)
-    else:
-        cls_embeddings_path = None
-    if grouping_embeddings_payload is not None:
-        torch.save(grouping_embeddings_payload, grouping_embeddings_path)
-    else:
-        grouping_embeddings_path = None
-
     artifacts = {
-        'tailsampler_candidates_csv': candidates_path,
         'tailguard_train_metadata_csv': train_metadata_path,
         'tailguard_train_analysis_metadata_csv': analysis_metadata_path,
-        'head_group_assignments_csv': head_group_assignments_path,
-        'cls_embeddings_pt': cls_embeddings_path,
-        'grouping_embeddings_pt': grouping_embeddings_path,
     }
     _write_json(summary_path, {'metadata': metadata, 'artifacts': artifacts})
     artifacts['prepare_summary_json'] = summary_path
@@ -82,28 +59,23 @@ def save_tailguard_prepare_artifacts(output_dir: str,
 
 
 def save_tailguard_gbps_iteration_artifacts(iter_dir: str,
-                                             train_scores_df: pd.DataFrame,
+                                             train_scores_df: Optional[pd.DataFrame],
                                              h_group_metrics_df: pd.DataFrame,
-                                             h_sample_group_scores_df: pd.DataFrame,
-                                             bootstrap_df: pd.DataFrame,
                                              summary: Dict):
     os.makedirs(iter_dir, exist_ok=True)
     train_scores_path = os.path.join(iter_dir, 'train_scores.csv')
     h_group_metrics_path = os.path.join(iter_dir, 'h_group_metrics.csv')
-    h_sample_group_scores_path = os.path.join(iter_dir, 'h_sample_group_scores.csv')
-    bootstrap_path = os.path.join(iter_dir, 'bootstrap_U.csv')
     summary_path = os.path.join(iter_dir, 'summary.json')
 
-    train_scores_df.to_csv(train_scores_path, index=False)
+    if train_scores_df is not None:
+        train_scores_df.to_csv(train_scores_path, index=False)
+    else:
+        train_scores_path = None
     h_group_metrics_df.to_csv(h_group_metrics_path, index=False)
-    h_sample_group_scores_df.to_csv(h_sample_group_scores_path, index=False)
-    bootstrap_df.to_csv(bootstrap_path, index=False)
     _write_json(summary_path, summary)
     return {
         'train_scores_csv': train_scores_path,
         'h_group_metrics_csv': h_group_metrics_path,
-        'h_sample_group_scores_csv': h_sample_group_scores_path,
-        'bootstrap_U_csv': bootstrap_path,
         'summary_json': summary_path,
     }
 
@@ -134,93 +106,40 @@ def save_tailguard_head_prune_artifacts(output_dir: str,
 
 def save_tailguard_attachment_artifacts(output_dir: str,
                                           geometry: Dict,
-                                          conformity_df: pd.DataFrame,
-                                          attachment_scores_df: Optional[pd.DataFrame],
-                                          elbow_summary: Dict,
+                                          reconciliation_scores_df: pd.DataFrame,
+                                          reconciliation_summary: Dict,
                                           tail_open_df: pd.DataFrame,
-                                          tail_attached_df: pd.DataFrame,
                                           tail_head_normal_df: pd.DataFrame,
-                                          tail_head_noise_df: pd.DataFrame,
-                                          membership_scores_df: Optional[pd.DataFrame] = None,
-                                          membership_calibration_df: Optional[pd.DataFrame] = None,
-                                          membership_summary: Optional[Dict] = None,
-                                          rgd_distances_df: Optional[pd.DataFrame] = None,
-                                          rgd_scores_df: Optional[pd.DataFrame] = None,
-                                          rgd_split_summary: Optional[Dict] = None,
                                           rgd_bic_candidates_df: Optional[pd.DataFrame] = None):
+    """Save one canonical record for each TRP result.
+
+    The RGD implementation has one score table and one set reassigned to the
+    head structure.  The public artifacts mirror those method-level concepts
+    instead of exposing internal aliases.
+    """
     os.makedirs(output_dir, exist_ok=True)
     geometry_path = os.path.join(output_dir, 'clean_head_group_geometry.pt')
-    conformity_path = os.path.join(output_dir, 'tail_group_conformity.csv')
-    attachment_scores_path = os.path.join(output_dir, 'tail_attachment_scores.csv')
-    elbow_summary_path = os.path.join(output_dir, 'attachment_elbow_summary.json')
+    reconciliation_scores_path = os.path.join(output_dir, 'tail_reconciliation_scores.csv')
+    reconciliation_summary_path = os.path.join(output_dir, 'tail_reconciliation_summary.json')
     tail_open_path = os.path.join(output_dir, 'tail_open_samples.csv')
-    tail_attached_path = os.path.join(output_dir, 'tail_attached_samples.csv')
     tail_head_normal_path = os.path.join(output_dir, 'tail_head_normal_samples.csv')
-    tail_head_noise_path = os.path.join(output_dir, 'tail_head_noise_samples.csv')
-    membership_scores_path = os.path.join(output_dir, 'tail_group_membership_scores.csv')
-    membership_calibration_path = os.path.join(output_dir, 'head_group_membership_calibration.csv')
-    membership_summary_path = os.path.join(output_dir, 'attachment_membership_summary.json')
-    rgd_distances_path = os.path.join(output_dir, 'tail_rgd_group_distances.csv')
-    rgd_scores_path = os.path.join(output_dir, 'tail_rgd_scores.csv')
-    rgd_split_summary_path = os.path.join(output_dir, 'rgd_split_summary.json')
     rgd_bic_candidates_path = os.path.join(output_dir, 'rgd_segmented_bic_candidates.csv')
 
     torch.save(geometry, geometry_path)
-    conformity_df.to_csv(conformity_path, index=False)
-    if attachment_scores_df is not None:
-        attachment_scores_df.to_csv(attachment_scores_path, index=False)
-    else:
-        attachment_scores_path = None
+    reconciliation_scores_df.to_csv(reconciliation_scores_path, index=False)
     tail_open_df.to_csv(tail_open_path, index=False)
-    tail_attached_df.to_csv(tail_attached_path, index=False)
     tail_head_normal_df.to_csv(tail_head_normal_path, index=False)
-    tail_head_noise_df.to_csv(tail_head_noise_path, index=False)
-    _write_json(elbow_summary_path, elbow_summary)
-    if membership_scores_df is not None:
-        membership_scores_df.to_csv(membership_scores_path, index=False)
+    _write_json(reconciliation_summary_path, reconciliation_summary)
+    if rgd_bic_candidates_df is not None and len(rgd_bic_candidates_df) > 0:
+        rgd_bic_candidates_df.to_csv(rgd_bic_candidates_path, index=False)
     else:
-        membership_scores_path = None
-    if membership_calibration_df is not None:
-        membership_calibration_df.to_csv(membership_calibration_path, index=False)
-    else:
-        membership_calibration_path = None
-    if membership_summary is not None:
-        _write_json(membership_summary_path, membership_summary)
-    else:
-        membership_summary_path = None
-    if rgd_distances_df is not None:
-        rgd_distances_df.to_csv(rgd_distances_path, index=False)
-    else:
-        rgd_distances_path = None
-    if rgd_scores_df is not None:
-        rgd_scores_df.to_csv(rgd_scores_path, index=False)
-    else:
-        rgd_scores_path = None
-    if rgd_split_summary is not None:
-        _write_json(rgd_split_summary_path, rgd_split_summary)
-    else:
-        rgd_split_summary_path = None
-    if rgd_bic_candidates_df is None:
-        rgd_bic_candidates_df = pd.DataFrame(columns=[
-            'split_index', 'left_count', 'right_count', 'left_sse', 'right_sse',
-            'sse_2', 'bic_2', 'is_selected',
-        ])
-    rgd_bic_candidates_df.to_csv(rgd_bic_candidates_path, index=False)
+        rgd_bic_candidates_path = None
     return {
         'clean_head_group_geometry_pt': geometry_path,
-        'tail_group_conformity_csv': conformity_path,
-        'tail_attachment_scores_csv': attachment_scores_path,
-        'attachment_elbow_summary_json': elbow_summary_path,
+        'tail_reconciliation_scores_csv': reconciliation_scores_path,
+        'tail_reconciliation_summary_json': reconciliation_summary_path,
         'tail_open_samples_csv': tail_open_path,
-        'tail_attached_samples_csv': tail_attached_path,
         'tail_head_normal_samples_csv': tail_head_normal_path,
-        'tail_head_noise_samples_csv': tail_head_noise_path,
-        'tail_group_membership_scores_csv': membership_scores_path,
-        'head_group_membership_calibration_csv': membership_calibration_path,
-        'attachment_membership_summary_json': membership_summary_path,
-        'tail_rgd_group_distances_csv': rgd_distances_path,
-        'tail_rgd_scores_csv': rgd_scores_path,
-        'rgd_split_summary_json': rgd_split_summary_path,
         'rgd_segmented_bic_candidates_csv': rgd_bic_candidates_path,
     }
 

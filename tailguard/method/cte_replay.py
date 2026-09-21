@@ -33,7 +33,7 @@ def encoder_features_once(model, images):
         reconstruction_tokens = [
             value[:, 1 + encoder.num_register_tokens :, :] for value in captured
         ]
-    patch_tokens = model.fuse_feature(reconstruction_tokens)
+    patch_tokens = model._fuse_features(reconstruction_tokens)
     if not model.remove_class_token:
         patch_tokens = patch_tokens[:, 1 + encoder.num_register_tokens :, :]
     return (

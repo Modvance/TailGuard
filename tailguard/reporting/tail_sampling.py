@@ -266,13 +266,6 @@ def run_tail_sampler_analysis(embeddings,
 def save_tail_sampler_artifacts(output_dir: str, summary_row: Dict, details_df: pd.DataFrame, metadata: Dict, save_details: bool = False):
     os.makedirs(output_dir, exist_ok=True)
 
-    summary_df = pd.DataFrame([summary_row])
-    summary_csv_path = os.path.join(output_dir, 'sampler_analysis.csv')
-    summary_df.to_csv(summary_csv_path, index=False)
-
-    aggregate_csv_path = os.path.join(output_dir, 'sampler_analysis_aggregate.csv')
-    summary_df.to_csv(aggregate_csv_path, index=False)
-
     details_csv_path = os.path.join(output_dir, 'sampler_analysis_details.csv')
     if save_details:
         details_df.to_csv(details_csv_path, index=False)
@@ -282,8 +275,6 @@ def save_tail_sampler_artifacts(output_dir: str, summary_row: Dict, details_df: 
         'summary': summary_row,
         'metadata': metadata,
         'artifacts': {
-            'sampler_analysis_csv': summary_csv_path,
-            'sampler_analysis_aggregate_csv': aggregate_csv_path,
             'sampler_analysis_details_csv': details_csv_path if save_details else None,
         },
     }
@@ -291,8 +282,6 @@ def save_tail_sampler_artifacts(output_dir: str, summary_row: Dict, details_df: 
         json.dump(payload, file, indent=2, ensure_ascii=False)
 
     return {
-        'sampler_analysis_csv': summary_csv_path,
-        'sampler_analysis_aggregate_csv': aggregate_csv_path,
         'sampler_analysis_details_csv': details_csv_path if save_details else None,
         'sampler_analysis_summary_json': summary_json_path,
     }

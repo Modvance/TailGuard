@@ -364,12 +364,8 @@ def prepare_tailguard_metadata(model,
         }
         saved = save_tailguard_prepare_artifacts(
             output_dir,
-            candidates_df,
             train_metadata_df,
-            head_group_assignments_df,
             metadata=metadata,
-            cls_embeddings_payload=cls_payload,
-            grouping_embeddings_payload=grouping_payload if bool(getattr(args, 'tg_save_grouping_embeddings', True)) else None,
             analysis_metadata_df=analysis_metadata_df,
         )
 

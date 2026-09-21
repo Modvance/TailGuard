@@ -1,12 +1,82 @@
 """Final coverage-reference evaluation and score fusion for TailGuard."""
 
+import json
 import os
+import shutil
+import tempfile
 import time
 from types import SimpleNamespace
 
 from tailguard.method.coverage import replay_coverage
 from tailguard.method.score_fusion import fuse as fuse_dual_scores
 from tailguard.reporting.artifacts import save_tailguard_summary
+
+
+def restore_completed_training(args):
+    """Restore the saved training result after a final-evaluation interruption."""
+    run_dir = os.path.realpath(os.path.join(args.save_dir, args.save_name))
+    checkpoint_path = os.path.join(run_dir, 'final_model.pt')
+    summary_path = os.path.join(run_dir, 'tailguard', 'tailguard_summary.json')
+    memory_scores_path = os.path.join(
+        run_dir,
+        'tailguard',
+        'memory',
+        'memory_eval_scores.csv',
+    )
+    required = (checkpoint_path, summary_path, memory_scores_path)
+    existing = [os.path.isfile(path) for path in required]
+    if not any(existing):
+        return None
+    if not all(existing):
+        missing = [path for path, present in zip(required, existing) if not present]
+        raise RuntimeError(
+            'the run directory contains an incomplete training result; missing: {}'.format(
+                ', '.join(missing)
+            )
+        )
+
+    with open(summary_path, encoding='utf-8') as summary_file:
+        summary = json.load(summary_file)
+    if summary.get('variant') != 'full':
+        raise RuntimeError(
+            'saved training result uses variant {!r}, not full'.format(
+                summary.get('variant')
+            )
+        )
+    if summary.get('memory_status') != 'completed':
+        raise RuntimeError('saved training result has no completed memory evaluation')
+
+    provenance = summary.get('dataset_provenance') or {}
+    saved_profile = provenance.get('profile_name')
+    if saved_profile is not None and saved_profile != args.dataset_profile:
+        raise RuntimeError(
+            'saved dataset profile {} does not match {}'.format(
+                saved_profile,
+                args.dataset_profile,
+            )
+        )
+    saved_data_path = provenance.get('data_path')
+    if (
+        saved_data_path is not None
+        and os.path.realpath(saved_data_path) != os.path.realpath(args.data_path)
+    ):
+        raise RuntimeError(
+            'saved data path does not match the requested data path: {} != {}'.format(
+                saved_data_path,
+                os.path.realpath(args.data_path),
+            )
+        )
+
+    memory_artifacts = dict(summary.get('memory_artifacts') or {})
+    memory_artifacts['memory_eval_scores_csv'] = memory_scores_path
+    return {
+        'checkpoint_path': checkpoint_path,
+        'memory_status': 'completed',
+        'memory_artifacts': memory_artifacts,
+        'summary': summary,
+        'summary_path': summary_path,
+        'restored': True,
+    }
 
 
 def run_final_evaluation(args, profile, training_result, print_fn):
@@ -21,7 +91,6 @@ def run_final_evaluation(args, profile, training_result, print_fn):
     run_dir = os.path.realpath(os.path.join(args.save_dir, args.save_name))
     coverage_dir = os.path.join(args.tg_root_dir, 'coverage')
     final_dir = os.path.join(args.tg_root_dir, 'final')
-    feature_cache_dir = os.path.join(args.tg_root_dir, 'coverage_feature_cache')
     for output_dir in (coverage_dir, final_dir):
         if os.path.exists(output_dir):
             raise FileExistsError(
@@ -30,25 +99,44 @@ def run_final_evaluation(args, profile, training_result, print_fn):
             )
 
     print_fn('Building TailGuard coverage reference from the trained checkpoint...')
-    coverage_summary = replay_coverage(SimpleNamespace(
-        full_run_dir=run_dir,
-        data_path=args.data_path,
-        output_dir=coverage_dir,
-        feature_cache_dir=feature_cache_dir,
-        encoder_checkpoint_path=training_result['checkpoint_path'],
-        dataset_profile=profile.name,
-        reference_raw_run_dir=None,
-        gpu=int(args.gpus),
-        batch_size=min(4, int(args.batch_size)),
-        tg_memory_topk_ratio=float(args.tg_memory_topk_ratio),
-        tg_memory_fusion_lambda=float(args.tg_memory_fusion_lambda),
-        tg_memory_route_margin_threshold=float(
-            args.tg_memory_route_margin_threshold
-        ),
-        tg_memory_min_class_members=int(args.tg_memory_min_class_members),
-        float_atol=2e-5,
-        no_save_memory_system=False,
-    ))
+    feature_cache_dir = tempfile.mkdtemp(prefix='tailguard_coverage_')
+    try:
+        coverage_summary = replay_coverage(SimpleNamespace(
+            full_run_dir=run_dir,
+            data_path=args.data_path,
+            output_dir=coverage_dir,
+            feature_cache_dir=feature_cache_dir,
+            encoder_checkpoint_path=training_result['checkpoint_path'],
+            dataset_profile=profile.name,
+            reference_raw_run_dir=None,
+            gpu=int(args.gpus),
+            batch_size=min(4, int(args.batch_size)),
+            tg_memory_topk_ratio=float(args.tg_memory_topk_ratio),
+            tg_memory_fusion_lambda=float(args.tg_memory_fusion_lambda),
+            tg_memory_route_margin_threshold=float(
+                args.tg_memory_route_margin_threshold
+            ),
+            tg_memory_min_class_members=int(args.tg_memory_min_class_members),
+            float_atol=2e-5,
+            no_save_memory_system=False,
+        ))
+    except Exception:
+        print_fn('Coverage feature cache preserved after failure: {}'.format(feature_cache_dir))
+        raise
+    else:
+        shutil.rmtree(feature_cache_dir)
+        coverage_summary_path = os.path.join(
+            coverage_dir,
+            'coverage_replay_summary.json',
+        )
+        with open(coverage_summary_path, encoding='utf-8') as summary_file:
+            coverage_summary = json.load(summary_file)
+        coverage_summary['feature_cache_dir'] = None
+        coverage_summary['feature_cache_disposition'] = (
+            'temporary cache removed after successful coverage evaluation'
+        )
+        with open(coverage_summary_path, 'w', encoding='utf-8') as summary_file:
+            json.dump(coverage_summary, summary_file, indent=2, ensure_ascii=False)
 
     analysis_artifacts = (
         training_result['summary']

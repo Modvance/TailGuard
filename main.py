@@ -20,7 +20,10 @@ from tailguard.data.profiles import (
     get_dataset_profile,
     profile_provenance,
 )
-from tailguard.engine.final_evaluation import run_final_evaluation
+from tailguard.engine.final_evaluation import (
+    restore_completed_training,
+    run_final_evaluation,
+)
 from tailguard.engine.pipeline import run_training
 from tailguard.engine.trainer import (
     DEFAULT_BATCH_SIZE,
@@ -176,12 +179,30 @@ def main(argv=None):
     device = 'cuda:{}'.format(args.gpus) if torch.cuda.is_available() else 'cpu'
     print_fn(device)
 
-    training_result = run_training(
-        args,
-        profile.item_list,
-        device,
-        print_fn,
-    )
+    training_result = None
+    if args.variant == 'full':
+        final_summary_path = os.path.join(
+            args.tg_root_dir,
+            'final',
+            'dual_summary.json',
+        )
+        if os.path.isfile(final_summary_path):
+            print_fn('TailGuard final evaluation already exists: {}'.format(final_summary_path))
+            return args
+        training_result = restore_completed_training(args)
+        if training_result is not None:
+            print_fn(
+                'Restored completed training artifacts; resuming final evaluation '
+                'without retraining.'
+            )
+
+    if training_result is None:
+        training_result = run_training(
+            args,
+            profile.item_list,
+            device,
+            print_fn,
+        )
     if args.variant == 'full':
         if torch.cuda.is_available():
             torch.cuda.empty_cache()

@@ -428,10 +428,12 @@ def run_training(args, item_list, device, print_fn):
                 summary['has_contamination_labels'] = bool(contaminated_paths is not None)
                 save_tailguard_gbps_iteration_artifacts(
                     iter_dir,
-                    gbps_result['train_scores_df'],
+                    (
+                        gbps_result['train_scores_df']
+                        if bool(trigger_result['summary']['gbps_improved'])
+                        else None
+                    ),
                     gbps_result['h_group_metrics_df'],
-                    gbps_result['h_sample_group_scores_df'],
-                    gbps_result['bootstrap_df'],
                     summary,
                 )
 
@@ -532,17 +534,10 @@ def run_training(args, item_list, device, print_fn):
                                     args.tg_attachment_membership_mode,
                                 )
                                 geometry = attachment_plan['geometry']
-                                conformity_df = attachment_plan['conformity_df']
-                                attachment_scores_df = attachment_plan['attachment_scores_df']
                                 tail_open_df = attachment_plan['tail_open_df']
                                 tail_attached_df = attachment_plan['tail_attached_df']
                                 elbow_summary = attachment_plan['attachment_summary']
-                                membership_scores_df = attachment_plan['membership_scores_df']
-                                membership_calibration_df = attachment_plan['membership_calibration_df']
-                                membership_summary = attachment_plan['membership_summary']
-                                rgd_distances_df = attachment_plan['rgd_distances_df']
                                 rgd_scores_df = attachment_plan['rgd_scores_df']
-                                rgd_split_summary = attachment_plan['rgd_split_summary']
                                 rgd_bic_candidates_df = attachment_plan['rgd_bic_candidates_df']
                                 tail_head_normal_df = tail_attached_df.copy().sort_values(
                                     'sample_idx', kind='mergesort'
@@ -551,19 +546,10 @@ def run_training(args, item_list, device, print_fn):
                                 attachment_saved = save_tailguard_attachment_artifacts(
                                     args.tg_attachment_dir,
                                     geometry,
-                                    conformity_df,
-                                    attachment_scores_df,
+                                    rgd_scores_df,
                                     elbow_summary,
                                     tail_open_df,
-                                    tail_attached_df,
                                     tail_head_normal_df,
-                                    tail_head_noise_df,
-                                    membership_scores_df=membership_scores_df,
-                                    membership_calibration_df=membership_calibration_df,
-                                    membership_summary=membership_summary,
-                                    rgd_distances_df=rgd_distances_df,
-                                    rgd_scores_df=rgd_scores_df,
-                                    rgd_split_summary=rgd_split_summary,
                                     rgd_bic_candidates_df=rgd_bic_candidates_df,
                                 )
                                 stage2_plan = build_tailguard_stage2_plan(
