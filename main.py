@@ -144,13 +144,17 @@ def _resolved_method_config(args):
 
 def _prepare_run_directories(args):
     args.tg_root_dir = os.path.join(args.save_dir, args.save_name, 'tailguard')
-    args.tg_prepare_dir = os.path.join(args.tg_root_dir, 'prepare')
-    args.tg_attachment_dir = os.path.join(args.tg_root_dir, 'attachment')
-    args.tg_stage2_dir = os.path.join(args.tg_root_dir, 'stage2')
-    args.tg_memory_dir = os.path.join(args.tg_root_dir, 'memory')
-    args.tg_checkpoint_dir = os.path.join(args.tg_root_dir, 'checkpoints')
+    args.tg_work_dir = os.path.join(args.tg_root_dir, '.work')
+    args.tg_artifact_dir = args.tg_work_dir if args.variant == 'full' else args.tg_root_dir
+    args.tg_prepare_dir = os.path.join(args.tg_artifact_dir, 'prepare')
+    args.tg_attachment_dir = os.path.join(args.tg_artifact_dir, 'attachment')
+    args.tg_stage2_dir = os.path.join(args.tg_artifact_dir, 'stage2')
+    args.tg_memory_dir = os.path.join(args.tg_artifact_dir, 'memory')
+    args.tg_checkpoint_dir = os.path.join(args.tg_artifact_dir, 'checkpoints')
+    args.tg_pseudoclass_dir = os.path.join(args.tg_artifact_dir, 'pseudoclasses')
+    args.tg_analysis_dir = os.path.join(args.tg_artifact_dir, 'analysis')
     if not os.path.isabs(args.diag_save_dir):
-        args.diag_save_dir = os.path.join(args.tg_root_dir, args.diag_save_dir)
+        args.diag_save_dir = os.path.join(args.tg_artifact_dir, args.diag_save_dir)
     os.makedirs(args.diag_save_dir, exist_ok=True)
     os.makedirs(args.tg_checkpoint_dir, exist_ok=True)
 
@@ -183,8 +187,7 @@ def main(argv=None):
     if args.variant == 'full':
         final_summary_path = os.path.join(
             args.tg_root_dir,
-            'final',
-            'dual_summary.json',
+            'run_summary.json',
         )
         if os.path.isfile(final_summary_path):
             print_fn('TailGuard final evaluation already exists: {}'.format(final_summary_path))

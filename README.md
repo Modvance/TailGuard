@@ -105,8 +105,9 @@ python main.py \
   --gpu 0
 ```
 
-The default configuration runs the complete TailGuard pipeline. Results are
-saved under `saved_results/`.
+The default configuration runs the complete TailGuard pipeline. A successful
+run saves the final model, two reference memories, compact train/test audit
+tables, metrics, and one run summary under `saved_results/`.
 
 ## Citation
 

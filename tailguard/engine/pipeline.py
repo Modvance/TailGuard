@@ -608,7 +608,7 @@ def run_training(args, item_list, device, print_fn):
                                 label_source=prepare_result['saved'].get('tailguard_train_analysis_metadata_csv') if prepare_result['saved'] else None,
                             )
                             denoising_diagnostics_artifacts = save_tailguard_denoising_diagnostics(
-                                args.tg_root_dir,
+                                args.tg_analysis_dir,
                                 denoising_diagnostics_summary,
                                 denoising_diagnostics_by_class,
                             )
@@ -627,7 +627,7 @@ def run_training(args, item_list, device, print_fn):
                                     cls_embeddings_payload,
                                 )
                                 pseudoclass_artifacts = save_tailguard_pseudoclass_artifacts(
-                                    os.path.join(args.tg_root_dir, 'pseudoclasses'),
+                                    args.tg_pseudoclass_dir,
                                     pseudoclass_registry['members_df'],
                                     pseudoclass_registry['classes_df'],
                                     pseudoclass_registry['tail_edges_df'],
@@ -643,7 +643,7 @@ def run_training(args, item_list, device, print_fn):
                                     )
                                 )
                                 pseudoclass_report_artifacts = save_tailguard_pseudoclass_report_artifacts(
-                                    args.tg_root_dir,
+                                    args.tg_analysis_dir,
                                     pseudoclass_report,
                                     pseudoclass_predictions,
                                     pseudoclass_summary_df,
@@ -737,7 +737,7 @@ def run_training(args, item_list, device, print_fn):
             cleanup_reason=cleanup_reason,
         )
         denoising_diagnostics_artifacts = save_tailguard_denoising_diagnostics(
-            args.tg_root_dir,
+            args.tg_analysis_dir,
             denoising_diagnostics_summary,
             denoising_diagnostics_by_class,
         )
@@ -893,7 +893,7 @@ def run_training(args, item_list, device, print_fn):
         'iters_per_sec': float(iters_per_sec),
         'samples_per_sec': float(samples_per_sec),
     }
-    summary_path = save_tailguard_summary(args.tg_root_dir, tailguard_summary)
+    summary_path = save_tailguard_summary(args.tg_artifact_dir, tailguard_summary)
     print_fn('saved tailguard summary to {}'.format(summary_path))
     return {
         'checkpoint_path': checkpoint_path,

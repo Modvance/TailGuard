@@ -2,24 +2,21 @@
 
 import json
 import os
-import shutil
-import tempfile
 import time
 from types import SimpleNamespace
 
 from tailguard.method.coverage import replay_coverage
 from tailguard.method.score_fusion import fuse as fuse_dual_scores
-from tailguard.reporting.artifacts import save_tailguard_summary
+from tailguard.reporting.compact_run import compact_completed_run
 
 
 def restore_completed_training(args):
     """Restore the saved training result after a final-evaluation interruption."""
     run_dir = os.path.realpath(os.path.join(args.save_dir, args.save_name))
     checkpoint_path = os.path.join(run_dir, 'final_model.pt')
-    summary_path = os.path.join(run_dir, 'tailguard', 'tailguard_summary.json')
+    summary_path = os.path.join(args.tg_work_dir, 'tailguard_summary.json')
     memory_scores_path = os.path.join(
-        run_dir,
-        'tailguard',
+        args.tg_work_dir,
         'memory',
         'memory_eval_scores.csv',
     )
@@ -89,18 +86,25 @@ def run_final_evaluation(args, profile, training_result, print_fn):
         )
 
     run_dir = os.path.realpath(os.path.join(args.save_dir, args.save_name))
-    coverage_dir = os.path.join(args.tg_root_dir, 'coverage')
-    final_dir = os.path.join(args.tg_root_dir, 'final')
-    for output_dir in (coverage_dir, final_dir):
-        if os.path.exists(output_dir):
-            raise FileExistsError(
-                'final evaluation output already exists; use a new '
-                '--save_name: {}'.format(output_dir)
-            )
-
-    print_fn('Building TailGuard coverage reference from the trained checkpoint...')
-    feature_cache_dir = tempfile.mkdtemp(prefix='tailguard_coverage_')
-    try:
+    coverage_dir = os.path.join(args.tg_work_dir, 'coverage')
+    final_dir = os.path.join(args.tg_work_dir, 'final')
+    coverage_summary_path = os.path.join(coverage_dir, 'coverage_replay_summary.json')
+    coverage_scores = os.path.join(coverage_dir, 'coverage_eval_scores.csv')
+    coverage_memory = os.path.join(coverage_dir, 'coverage_memory_system.pt')
+    coverage_complete = all(os.path.isfile(path) for path in (
+        coverage_summary_path,
+        coverage_scores,
+        coverage_memory,
+    ))
+    if os.path.exists(coverage_dir) and not coverage_complete:
+        raise RuntimeError('incomplete coverage output requires manual inspection: {}'.format(coverage_dir))
+    if coverage_complete:
+        print_fn('Restored completed coverage evaluation: {}'.format(coverage_dir))
+        with open(coverage_summary_path, encoding='utf-8') as summary_file:
+            coverage_summary = json.load(summary_file)
+    else:
+        print_fn('Building TailGuard coverage reference from the trained checkpoint...')
+        feature_cache_dir = os.path.join(args.tg_work_dir, 'feature_cache')
         coverage_summary = replay_coverage(SimpleNamespace(
             full_run_dir=run_dir,
             data_path=args.data_path,
@@ -120,23 +124,6 @@ def run_final_evaluation(args, profile, training_result, print_fn):
             float_atol=2e-5,
             no_save_memory_system=False,
         ))
-    except Exception:
-        print_fn('Coverage feature cache preserved after failure: {}'.format(feature_cache_dir))
-        raise
-    else:
-        shutil.rmtree(feature_cache_dir)
-        coverage_summary_path = os.path.join(
-            coverage_dir,
-            'coverage_replay_summary.json',
-        )
-        with open(coverage_summary_path, encoding='utf-8') as summary_file:
-            coverage_summary = json.load(summary_file)
-        coverage_summary['feature_cache_dir'] = None
-        coverage_summary['feature_cache_disposition'] = (
-            'temporary cache removed after successful coverage evaluation'
-        )
-        with open(coverage_summary_path, 'w', encoding='utf-8') as summary_file:
-            json.dump(coverage_summary, summary_file, indent=2, ensure_ascii=False)
 
     analysis_artifacts = (
         training_result['summary']
@@ -152,19 +139,30 @@ def run_final_evaluation(args, profile, training_result, print_fn):
     reconciled_scores = (
         training_result['memory_artifacts']['memory_eval_scores_csv']
     )
-    coverage_scores = os.path.join(
-        coverage_dir,
-        'coverage_eval_scores.csv',
-    )
-    print_fn(
-        'Fusing coverage and reconciled evidence into the final TailGuard output...'
-    )
-    final_image_summary = fuse_dual_scores(
-        coverage_path=coverage_scores,
-        reconciled_path=reconciled_scores,
-        output_dir=final_dir,
-        class_roles_path=class_roles_path,
-    )
+    final_summary_path = os.path.join(final_dir, 'dual_summary.json')
+    final_scores_path = os.path.join(final_dir, 'dual_scores.csv')
+    final_per_class_path = os.path.join(final_dir, 'dual_per_class.csv')
+    final_complete = all(os.path.isfile(path) for path in (
+        final_summary_path,
+        final_scores_path,
+        final_per_class_path,
+    ))
+    if os.path.exists(final_dir) and not final_complete:
+        raise RuntimeError('incomplete final fusion output requires manual inspection: {}'.format(final_dir))
+    if final_complete:
+        print_fn('Restored completed score fusion: {}'.format(final_dir))
+        with open(final_summary_path, encoding='utf-8') as summary_file:
+            final_image_summary = json.load(summary_file)
+    else:
+        print_fn(
+            'Fusing coverage and reconciled evidence into the final TailGuard output...'
+        )
+        final_image_summary = fuse_dual_scores(
+            coverage_path=coverage_scores,
+            reconciled_path=reconciled_scores,
+            output_dir=final_dir,
+            class_roles_path=class_roles_path,
+        )
 
     complete_summary = dict(training_result['summary'])
     final_evaluation_time = time.time() - evaluation_start_time
@@ -177,15 +175,16 @@ def run_final_evaluation(args, profile, training_result, print_fn):
         'evaluation_time_s': float(final_evaluation_time),
         'artifacts': {
             'coverage_scores_csv': coverage_scores,
-            'final_scores_csv': os.path.join(final_dir, 'dual_scores.csv'),
-            'final_per_class_csv': os.path.join(final_dir, 'dual_per_class.csv'),
-            'final_summary_json': os.path.join(final_dir, 'dual_summary.json'),
+            'final_scores_csv': final_scores_path,
+            'final_per_class_csv': final_per_class_path,
+            'final_summary_json': final_summary_path,
         },
     }
     complete_summary['end_to_end_time_s'] = float(
         complete_summary.get('total_time_s', 0.0) + final_evaluation_time
     )
-    summary_path = save_tailguard_summary(args.tg_root_dir, complete_summary)
+    compact_summary = compact_completed_run(args, complete_summary)
+    summary_path = os.path.join(args.tg_root_dir, 'run_summary.json')
     print_fn('Complete TailGuard evaluation finished.')
     print_fn(
         '  final I-AUROC  {:.2f}'.format(
@@ -194,4 +193,4 @@ def run_final_evaluation(args, profile, training_result, print_fn):
     )
     print_fn('  evaluation time {:.2f}s'.format(final_evaluation_time))
     print_fn('  summary        {}'.format(summary_path))
-    return complete_summary
+    return compact_summary

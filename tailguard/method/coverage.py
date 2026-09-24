@@ -108,11 +108,13 @@ def _test_key_frame(frame):
 def _load_full_artifacts(full_run_dir):
     run_dir = os.path.realpath(full_run_dir)
     tailguard_dir = os.path.join(run_dir, 'tailguard')
+    work_dir = os.path.join(tailguard_dir, '.work')
+    artifact_dir = work_dir if os.path.isdir(work_dir) else tailguard_dir
     paths = {
-        'retained': os.path.join(tailguard_dir, 'stage2', 'stage2_retained_samples.csv'),
-        'removed': os.path.join(tailguard_dir, 'stage2', 'stage2_removed_samples.csv'),
-        'full_members': os.path.join(tailguard_dir, 'pseudoclasses', 'pseudo_class_members.csv'),
-        'full_scores': os.path.join(tailguard_dir, 'memory', 'memory_eval_scores.csv'),
+        'retained': os.path.join(artifact_dir, 'stage2', 'stage2_retained_samples.csv'),
+        'removed': os.path.join(artifact_dir, 'stage2', 'stage2_removed_samples.csv'),
+        'full_members': os.path.join(artifact_dir, 'pseudoclasses', 'pseudo_class_members.csv'),
+        'full_scores': os.path.join(artifact_dir, 'memory', 'memory_eval_scores.csv'),
     }
     for name, path in paths.items():
         if not os.path.isfile(path):
