@@ -1,0 +1,9 @@
+metric,variant,mvtec_pareto,mvtec_step_k4,mvtec_step_k1,visa_pareto,visa_step_k4,visa_step_k1,mean
+I-AUROC,reconstruction_core,93.32,89.08,88.08,91.71,90.84,89.01,90.34
+I-AUROC,dhp,96.86,95.82,93.18,93.83,91.43,89.81,93.49
+I-AUROC,dhp_cte_without_trp,96.96,95.86,96.39,93.70,91.89,92.26,94.51
+I-AUROC,tailguard,97.08,95.86,96.36,93.72,91.97,92.21,94.53
+P-AUPRO,reconstruction_core,90.08,88.86,86.07,92.31,90.21,84.04,88.60
+P-AUPRO,dhp,92.44,91.53,88.42,92.77,89.43,84.74,89.89
+P-AUPRO,dhp_cte_without_trp,89.84,88.70,89.56,92.39,90.13,89.26,89.98
+P-AUPRO,tailguard,92.32,92.05,90.63,92.69,90.21,87.62,90.92

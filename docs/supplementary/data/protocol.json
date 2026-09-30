@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "protocol_id": "tailguard_icassp_web_supplement_v1",
+  "metric_scale": "percent_0_to_100",
+  "main_results": {
+    "datasets": ["MVTec AD", "VisA"],
+    "settings": ["Pareto", "Step-K4", "Step-K1"],
+    "independent_constructions_per_setting": 5,
+    "total_runs": 30,
+    "class_aggregation": "macro_average",
+    "image_score": "equal_average_of_coverage_and_reconciled_image_scores",
+    "pixel_output": "reconciled_final_anomaly_map",
+    "standard_deviation": "sample_standard_deviation_across_five_construction_level_macro_averages_ddof_1"
+  },
+  "component_and_mechanism_analyses": {
+    "matched_constructions_per_setting": 1,
+    "total_matched_settings": 6,
+    "matching_rule": "compared_decisions_operate_on_identical_training_samples"
+  },
+  "analysis_labels": {
+    "tail_identity": "post_training_audit_only",
+    "injected_contamination": "post_training_audit_only",
+    "used_for_training_or_threshold_selection": false
+  }
+}

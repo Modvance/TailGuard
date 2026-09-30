@@ -1,0 +1,25 @@
+metric,method,dataset,setting,tail,head,all
+I-AUROC,TailedCore,MVTec AD,Pareto,96.55,95.24,96.13
+I-AUROC,TailGuard,MVTec AD,Pareto,97.57,95.55,96.66
+I-AUROC,TailedCore,MVTec AD,Step-K4,95.82,95.34,95.72
+I-AUROC,TailGuard,MVTec AD,Step-K4,97.11,94.88,96.22
+I-AUROC,TailedCore,MVTec AD,Step-K1,93.54,95.77,94.44
+I-AUROC,TailGuard,MVTec AD,Step-K1,95.65,94.87,95.34
+I-AUROC,TailedCore,VisA,Pareto,87.55,93.06,90.86
+I-AUROC,TailGuard,VisA,Pareto,93.62,92.67,92.87
+I-AUROC,TailedCore,VisA,Step-K4,85.16,95.91,89.65
+I-AUROC,TailGuard,VisA,Step-K4,88.07,95.25,91.06
+I-AUROC,TailedCore,VisA,Step-K1,82.97,94.11,87.61
+I-AUROC,TailGuard,VisA,Step-K1,81.02,95.91,87.23
+P-AUROC,TailedCore,MVTec AD,Pareto,96.08,95.01,95.30
+P-AUROC,TailGuard,MVTec AD,Pareto,97.76,95.08,96.58
+P-AUROC,TailedCore,MVTec AD,Step-K4,95.56,93.20,94.75
+P-AUROC,TailGuard,MVTec AD,Step-K4,96.17,97.27,96.61
+P-AUROC,TailedCore,MVTec AD,Step-K1,94.19,93.70,94.00
+P-AUROC,TailGuard,MVTec AD,Step-K1,94.42,97.40,95.61
+P-AUROC,TailedCore,VisA,Pareto,97.98,97.25,97.49
+P-AUROC,TailGuard,VisA,Pareto,97.96,97.20,97.45
+P-AUROC,TailedCore,VisA,Step-K4,96.80,97.02,96.90
+P-AUROC,TailGuard,VisA,Step-K4,95.77,98.83,97.05
+P-AUROC,TailedCore,VisA,Step-K1,96.12,97.39,96.65
+P-AUROC,TailGuard,VisA,Step-K1,94.05,98.69,95.99

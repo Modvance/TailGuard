@@ -1,0 +1,8 @@
+metric,balanced_clean,balanced_contaminated,long_tail_clean,long_tail_contaminated,contrast,negative_settings,total_settings
+I-AUROC,99.17,96.74,96.04,90.35,-3.25,6,6
+Image_AP,99.33,97.87,97.04,93.89,-1.68,6,6
+Image_F1,97.60,95.04,94.36,89.93,-1.87,6,6
+P-AUROC,98.55,98.12,97.58,96.53,-0.63,6,6
+Pixel_AP,61.15,56.29,54.83,49.30,-0.67,4,6
+Pixel_F1,62.41,58.11,56.95,51.67,-0.97,4,6
+P-AUPRO,94.59,93.47,91.83,88.57,-2.14,6,6

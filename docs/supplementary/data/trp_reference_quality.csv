@@ -1,0 +1,5 @@
+metric,initial_candidates,reconciled_references,direction
+reference_purity,91.44,97.88,higher_is_better
+contamination_rate,8.56,2.12,lower_is_better
+contaminant_retention,100.00,14.91,lower_is_better
+genuine_tail_coverage,94.67,66.10,higher_is_better

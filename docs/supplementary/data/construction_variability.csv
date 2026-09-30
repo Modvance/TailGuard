@@ -1,0 +1,22 @@
+metric,dataset,setting,mean,std,num_constructions
+I-AUROC,MVTec AD,Pareto,96.66,0.72,5
+I-AUROC,MVTec AD,Step-K4,96.22,0.42,5
+I-AUROC,MVTec AD,Step-K1,95.34,1.21,5
+I-AUROC,VisA,Pareto,92.87,0.63,5
+I-AUROC,VisA,Step-K4,91.06,2.12,5
+I-AUROC,VisA,Step-K1,87.23,4.81,5
+I-AUROC,All,Six-setting mean,93.23,1.08,5
+P-AUROC,MVTec AD,Pareto,96.58,0.52,5
+P-AUROC,MVTec AD,Step-K4,96.61,0.61,5
+P-AUROC,MVTec AD,Step-K1,95.61,1.34,5
+P-AUROC,VisA,Pareto,97.45,0.90,5
+P-AUROC,VisA,Step-K4,97.05,1.15,5
+P-AUROC,VisA,Step-K1,95.99,1.27,5
+P-AUROC,All,Six-setting mean,96.55,0.29,5
+P-AUPRO,MVTec AD,Pareto,92.47,0.44,5
+P-AUPRO,MVTec AD,Step-K4,91.21,1.71,5
+P-AUPRO,MVTec AD,Step-K1,90.80,1.61,5
+P-AUPRO,VisA,Pareto,90.61,2.86,5
+P-AUPRO,VisA,Step-K4,89.26,3.00,5
+P-AUPRO,VisA,Step-K1,86.34,1.68,5
+P-AUPRO,All,Six-setting mean,90.11,0.63,5

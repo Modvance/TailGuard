@@ -1,0 +1,9 @@
+dataset,setting,example,softpatch,tailedcore,tailguard
+MVTec AD,Step-K4,Bottle,10.10,65.04,95.92
+MVTec AD,Step-K4,"Grid, bent",1.79,47.18,49.38
+MVTec AD,Step-K4,"Grid, thread",1.43,50.45,52.43
+MVTec AD,Step-K4,Metal Nut,13.82,79.62,95.30
+MVTec AD,Step-K4,Pill,44.77,45.87,72.12
+MVTec AD,Step-K4,Tile,73.11,70.87,96.85
+VisA,Step-K4,Capsules,,26.90,92.60
+VisA,Step-K4,Chewing Gum,,46.00,69.20

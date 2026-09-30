@@ -1,0 +1,7 @@
+dataset,setting,coverage_banks,reconciled_banks,coverage_patch_features,reconciled_patch_features,total_mib
+MVTec AD,Pareto,15,2,63504,9408,213.6
+MVTec AD,Step-K4,24,17,42336,28224,206.7
+MVTec AD,Step-K1,17,8,21952,6272,82.7
+VisA,Pareto,5,4,57632,37632,279.1
+VisA,Step-K4,9,5,21168,12544,98.8
+VisA,Step-K1,7,4,6272,3136,27.6

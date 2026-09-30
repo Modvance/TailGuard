@@ -1,0 +1,8 @@
+dataset,setting,training_samples,true_tail_samples,contaminated_samples,tail_auroc,tail_ap,contamination_auroc,contamination_ap
+MVTec AD,Pareto,811,56,74,99.87,97.00,41.21,8.77
+MVTec AD,Step-K4,1624,36,144,99.76,84.86,52.36,13.17
+MVTec AD,Step-K1,1885,9,170,99.95,81.82,52.06,16.09
+VisA,Pareto,2175,48,104,100.00,100.00,50.47,4.69
+VisA,Step-K4,4290,28,202,95.22,76.47,50.20,5.06
+VisA,Step-K1,4269,7,202,95.25,85.78,49.55,5.60
+Macro_or_total,All,15054,184,896,98.34,87.66,49.31,8.90

@@ -1,0 +1,8 @@
+dataset,setting,selected_iteration,num_samples,num_contaminated,raw_auroc,raw_ap,group_normalized_auroc,group_normalized_ap,gmm_posterior_auroc,gmm_posterior_ap
+MVTec AD,Pareto,980,730,69,98.62,95.25,97.69,93.04,97.40,85.49
+MVTec AD,Step-K4,1140,1570,126,91.16,68.20,96.22,81.04,94.58,79.92
+MVTec AD,Step-K1,1140,1857,151,99.05,92.62,98.74,89.19,98.78,86.84
+VisA,Pareto,200,2022,99,79.66,12.79,91.78,34.95,87.30,32.80
+VisA,Step-K4,1500,4263,199,94.02,70.76,97.57,73.28,96.83,70.35
+VisA,Step-K1,1360,4261,200,93.54,70.20,97.53,73.88,97.28,72.07
+Macro_or_total,All,,14703,844,92.68,68.30,96.59,74.23,95.36,71.24
